@@ -1,87 +1,55 @@
-# PDF Validator Service
+﻿# PDF Validator Service
 
-Microservicio encargado de validar archivos PDF antes de que continúen al resto del sistema.
+Microservicio de PDF ExtractText que valida los archivos antes de extraer su texto.
+Flujo: Cliente → Orchestrator → **Validator** → Extractor → Persistence → MongoDB.
 
-## Funciones
+Su única responsabilidad es decir si un archivo es un PDF aceptable. No extrae texto ni guarda nada.
 
-El servicio verifica:
+## Reglas de validación
 
-* Que el archivo tenga extensión `.pdf`.
-* Que el tipo de contenido sea `application/pdf`.
-* Que el archivo no supere los 10 MB.
+Se aplican en este orden; la primera que falla corta la validación.
 
-Si el archivo es válido, devuelve:
+| # | Regla | Código HTTP |
+|---|-------|-------------|
+| 1 | Extensión `.pdf` (sin importar mayúsculas) | 415 |
+| 2 | Tipo de contenido `application/pdf` | 415 |
+| 3 | El archivo no está vacío | 400 |
+| 4 | No supera `MAX_FILE_SIZE_MB` (10 MB por defecto) | 413 |
+| 5 | Empieza con la firma `%PDF-` | 415 |
+| 6 | Se puede abrir y tiene al menos una página | 422 |
 
-```json
-{
-  "valido": true,
-  "mensaje": "El archivo PDF es válido"
-}
-```
+Un PDF protegido con contraseña se acepta: si se puede leer lo decide el Extractor.
 
 ## Endpoints
 
-### Health check
+- `GET /health` → `{"status": "ok"}`
+- `POST /validate`: recibe el PDF como `multipart/form-data` en el campo `file`.
+  - 200: `{"valido": true, "mensaje": "El archivo es un PDF válido."}`
+  - Errores en formato RFC 9457 (`application/problem+json`) con los campos
+    `type`, `title`, `status`, `detail` e `instance`.
 
-```text
-GET /health
-```
+El formato de la respuesta exitosa y el idioma de los campos quedan sujetos a la reunión de contratos.
 
-Respuesta:
+## Arquitectura
 
-```json
-{
-  "status": "ok"
-}
-```
+- `app/main.py`: rutas y traducción de errores a RFC 9457.
+- `app/core/config.py`: configuración desde variables de entorno.
+- `app/core/errors.py`: respuestas `application/problem+json`.
+- `app/utils/validators.py`: reglas de validación (no depende de FastAPI).
+- `tests/`: 20 tests con PDFs reales generados con pypdf.
 
-### Validar PDF
+## Variables de entorno
 
-```text
-POST /validate
-```
+| Variable | Default | Uso |
+|----------|---------|-----|
+| `MAX_FILE_SIZE_MB` | `10` | Tamaño máximo aceptado |
+| `PORT` | `8000` | Puerto dentro del contenedor |
 
-El archivo debe enviarse mediante `multipart/form-data` usando el campo `file`.
+## Cómo correrlo
 
-## Ejecución local
+- Instalar: `uv sync`
+- Tests: `uv run pytest`
+- Servidor: `uv run uvicorn app.main:app --reload --port 8001`
+- Docker: `docker build -t pdf-validator-service .` y `docker run --rm -p 8001:8000 pdf-validator-service`
 
-Crear y activar el entorno virtual:
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-```
-
-Instalar dependencias:
-
-```powershell
-python -m pip install fastapi uvicorn python-multipart pytest
-```
-
-Ejecutar el servicio:
-
-```powershell
-python -m uvicorn app.main:app --host 0.0.0.0 --port 8001
-```
-
-El servicio queda disponible en:
-
-```text
-http://localhost:8001
-```
-
-## Tests
-
-Para ejecutar las pruebas:
-
-```powershell
-pytest
-```
-
-## Docker
-
-El servicio utiliza el puerto `8001`.
-
-```text
-8001:8001
-```
+Decisiones de diseño: ver `docs/decisiones.md`.
