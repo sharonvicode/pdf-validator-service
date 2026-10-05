@@ -1,0 +1,5 @@
+[33m5cd65c7[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mtdd-rework[m[33m, [m[1;31morigin/tdd-rework[m[33m)[m docs: document contract, validation rules and decisions (#3)
+[33m0623a9d[m resolviendo test del validador
+[33m15a23ea[m test: add PDF validation and HTTP contract cases (RED) (#2)
+[33m7b5a731[m chore: migrate to uv and add .dockerignore (#1)
+[33m0f9ec39[m[33m ([m[1;31morigin/main[m[33m, [m[1;32mmain[m[33m)[m Implement PDF validator microservice
