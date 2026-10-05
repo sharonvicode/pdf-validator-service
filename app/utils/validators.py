@@ -3,7 +3,6 @@
 No depende de FastAPI: recibe los datos del archivo y lanza un
 PDFValidationError con el código HTTP que corresponde a cada regla.
 """
-
 from io import BytesIO
 
 from pypdf import PdfReader
