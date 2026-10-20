@@ -58,3 +58,7 @@ def test_rejects_corrupt_pdf():
 def test_rejects_pdf_without_pages(pdf_without_pages):
     with pytest.raises(InvalidPDFError, match="no tiene páginas"):
         validate_pdf("documento.pdf", PDF_MIME, pdf_without_pages, MAX_SIZE)
+
+
+def test_accepts_encrypted_pdf(encrypted_pdf):
+    validate_pdf("documento.pdf", PDF_MIME, encrypted_pdf, MAX_SIZE)
