@@ -7,11 +7,17 @@ PROBLEM_JSON = "application/problem+json"
 
 
 def problem_response(
-    request: Request, status: int, type_: str, title: str, detail: str
+    request: Request,
+    status: int,
+    type_: str,
+    title: str,
+    detail: str,
+    headers: dict[str, str] | None = None,
 ) -> JSONResponse:
     return JSONResponse(
         status_code=status,
         media_type=PROBLEM_JSON,
+        headers=headers,
         content={
             "type": type_,
             "title": title,

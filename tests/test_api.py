@@ -127,12 +127,13 @@ def test_wrong_method_returns_405_with_allow_header(client):
     assert response.headers["allow"] == "POST"
 
 
-def test_unexpected_error_returns_500_without_internal_details(
-    client, valid_pdf, monkeypatch, caplog
-):
-    def explode(**_):
-        raise RuntimeError(r"fallo en C:\secreto\modulo.py")
+def explode(**_):
+    raise RuntimeError(r"fallo en C:\secreto\modulo.py")
 
+
+def test_unexpected_error_returns_500_without_internal_details(
+    client, valid_pdf, monkeypatch
+):
     monkeypatch.setattr(main, "validate_pdf", explode)
 
     response = post_file(client, "documento.pdf", valid_pdf)
@@ -142,8 +143,14 @@ def test_unexpected_error_returns_500_without_internal_details(
     assert "secreto" not in response.text
     assert "RuntimeError" not in response.text
     assert "Traceback" not in response.text
-    # El detalle queda en los logs del servicio.
-    assert "secreto" in caplog.text
+
+
+def test_unexpected_error_reaches_the_server_to_be_logged(valid_pdf, monkeypatch):
+    monkeypatch.setattr(main, "validate_pdf", explode)
+    # TestClient por defecto re-lanza lo que llega al servidor, igual que uvicorn
+    # recibe la excepción y la loguea con su traza.
+    with pytest.raises(RuntimeError, match="secreto"):
+        post_file(TestClient(app), "documento.pdf", valid_pdf)
 
 
 def test_app_fails_to_start_with_invalid_config(monkeypatch):
