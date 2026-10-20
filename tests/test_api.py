@@ -6,6 +6,7 @@ from app.core.config import Settings, get_settings
 from app.main import app
 
 PROBLEM_FIELDS = {"type", "title", "status", "detail", "instance"}
+VALID_BODY = {"valido": True, "mensaje": "El archivo es un PDF válido."}
 BAD_REQUEST_DETAIL = (
     "La solicitud debe enviar un archivo en el campo 'file' (multipart/form-data)."
 )
@@ -44,7 +45,7 @@ def test_validate_accepts_valid_pdf(client, valid_pdf):
     response = post_file(client, "documento.pdf", valid_pdf)
     assert response.status_code == 200
     assert response.headers["content-type"] == "application/json"
-    assert response.json() == {"valido": True, "mensaje": "El archivo es un PDF válido."}
+    assert response.json() == VALID_BODY
 
 
 def test_validate_accepts_encrypted_pdf(client, encrypted_pdf):
@@ -158,3 +159,33 @@ def test_app_fails_to_start_with_invalid_config(monkeypatch):
     with pytest.raises(ValueError, match="MAX_FILE_SIZE_MB"):
         with TestClient(app):
             pass
+
+
+def documented_problem_types(response):
+    """Tipos de problema de los ejemplos de una respuesta OpenAPI de error."""
+    assert set(response["content"]) == {"application/problem+json"}
+    media = response["content"]["application/problem+json"]
+    assert PROBLEM_FIELDS <= set(media["schema"]["required"])
+    return {example["value"]["type"] for example in media["examples"].values()}
+
+
+def test_openapi_documents_validate_contract():
+    responses = app.openapi()["paths"]["/validate"]["post"]["responses"]
+
+    assert set(responses) == {"200", "400", "413", "415", "422", "500"}
+    assert responses["200"]["content"]["application/json"]["example"] == VALID_BODY
+    assert documented_problem_types(responses["400"]) == {
+        "/errors/empty-file",
+        "/errors/bad-request",
+    }
+    assert documented_problem_types(responses["413"]) == {"/errors/file-too-large"}
+    assert documented_problem_types(responses["415"]) == {
+        "/errors/unsupported-file-type"
+    }
+    assert documented_problem_types(responses["422"]) == {"/errors/invalid-pdf"}
+    assert documented_problem_types(responses["500"]) == {"/errors/internal"}
+
+
+def test_openapi_does_not_document_fastapi_validation_error():
+    schemas = app.openapi().get("components", {}).get("schemas", {})
+    assert "HTTPValidationError" not in schemas

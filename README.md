@@ -36,10 +36,17 @@ httpx.post(f"{VALIDATOR_URL}/validate", files={"file": (nombre, contenido, "appl
 
 Un archivo inválido nunca devuelve 200: el status es la señal.
 
+El OpenAPI (`/openapi.json`, `/docs`) documenta las mismas respuestas de `POST /validate`
+(200, 400, 413, 415, 422 y 500), con esquema y ejemplos `application/problem+json` para los errores.
+404 y 405 no figuran ahí porque no dependen de una operación concreta.
+
 ### Errores (RFC 9457)
 
-Todos los errores, incluidos 404, 405 y 500, se responden como `application/problem+json`
-con los campos `type`, `title`, `status`, `detail` e `instance` (la ruta pedida).
+Todos los errores que genera la aplicación, incluidos 404, 405 y 500, se responden como
+`application/problem+json` con los campos `type`, `title`, `status`, `detail` e `instance`
+(la ruta pedida). Quedan fuera las respuestas que no llegan a la aplicación: si uvicorn recibe un
+request HTTP mal formado responde por su cuenta (`400 text/plain`, "Invalid HTTP request received."),
+y un proxy o la infraestructura pueden responder con su propio formato (ver *Disponibilidad*).
 **El cliente debe decidir por `type` (o `status`), nunca por `detail`**, que es texto para personas.
 
 Ejemplo:
@@ -61,10 +68,13 @@ Las reglas se aplican en este orden; la primera que falla corta la validación.
 | 1 | Extensión `.pdf` | 415 | `/errors/unsupported-file-type` | El archivo debe tener extensión .pdf. |
 | 2 | `Content-Type: application/pdf` | 415 | `/errors/unsupported-file-type` | El tipo de contenido debe ser application/pdf. |
 | 3 | No está vacío | 400 | `/errors/empty-file` | El archivo está vacío. |
-| 4 | No supera `MAX_FILE_SIZE_MB` | 413 | `/errors/file-too-large` | El archivo supera el máximo de 10 MB. |
+| 4 | No supera `MAX_FILE_SIZE_MB` | 413 | `/errors/file-too-large` | El archivo supera el máximo de *N* MB. |
 | 5 | Empieza con la firma `%PDF-` | 415 | `/errors/unsupported-file-type` | El contenido del archivo no es un PDF. |
 | 6 | Se puede abrir (no está corrupto) | 422 | `/errors/invalid-pdf` | El PDF está dañado o no se puede leer. |
 | 7 | Tiene al menos una página | 422 | `/errors/invalid-pdf` | El PDF no tiene páginas. |
+
+En la regla 4, *N* es el valor de `MAX_FILE_SIZE_MB` (10 por defecto). El límite se calcula en MiB
+(*N* × 1 048 576 bytes); el mensaje dice "MB" por simplicidad, pero se refiere a esa misma cantidad.
 
 Un PDF protegido con contraseña se acepta sin contar páginas: si se puede leer lo decide el Extractor.
 
