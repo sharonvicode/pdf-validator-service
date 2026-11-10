@@ -1,0 +1,32 @@
+version: '3.8'
+
+services:
+  consul:
+    image: hashicorp/consul:1.21
+    container_name: consul
+    command: "agent -dev -client=0.0.0.0"
+    ports:
+      - "127.0.0.1:8500:8500"
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8500"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+
+  validator:
+    build: .
+    container_name: validator
+    ports:
+      - "8000:8000"
+    environment:
+      - CONSUL_URL=http://consul:8500
+      - CONSUL_SERVICE_NAME=validator
+      - PORT=8000
+    depends_on:
+      consul:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
