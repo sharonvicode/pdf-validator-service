@@ -2,6 +2,7 @@
 
 from contextlib import asynccontextmanager
 from http import HTTPStatus
+import logging
 
 from fastapi import Depends, FastAPI, File, Request, UploadFile
 from fastapi.exceptions import RequestValidationError
@@ -9,6 +10,7 @@ from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from app.core.config import Settings, get_settings
 from app.core.errors import PROBLEM_JSON, PROBLEM_SCHEMA, problem_response
+from app.core.service_registry import register_service, deregister_service
 from app.utils.validators import (
     EmptyFileError,
     FileTooLargeError,
@@ -17,6 +19,30 @@ from app.utils.validators import (
     UnsupportedFileTypeError,
     validate_pdf,
 )
+
+logger = logging.getLogger(__name__)
+
+# ... (código intermedio de respuestas, exceptions y documentación se mantiene igual)
+
+@asynccontextmanager
+async def lifespan(_: FastAPI):
+    settings = get_settings()
+    
+    # Startup: Registra el servicio en Consul (Fail Fast: si Consul no responde, el servicio no levanta)
+    register_service(settings)
+    
+    yield
+    
+    # Shutdown: Da de baja el servicio de Consul (si falla, solo emite un warning en el log)
+    try:
+        deregister_service(settings)
+    except Exception as e:
+        logger.warning(f"Error al dar de baja el servicio en Consul durante el apagado: {e}")
+
+
+app = FastAPI(title="PDF Validator Service", version="0.1.0", lifespan=lifespan)
+
+# ... (resto del archivo con exception_handlers, /health y /validate)
 
 VALID_RESPONSE = {"valido": True, "mensaje": "El archivo es un PDF válido."}
 
