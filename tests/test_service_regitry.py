@@ -2,7 +2,7 @@ import threading
 import http.server
 import json
 import pytest
-from app.core.service_registry import register_service, deregister_service
+from app.core.service_registry import register_service, deregister_service, get_container_ip
 from app.core.config import Settings
 
 class FakeConsulHandler(http.server.BaseHTTPRequestHandler):
@@ -57,7 +57,10 @@ def test_register_service_success(fake_consul):
     assert path == "/v1/agent/service/register"
     assert data["Name"] == "validator"
     assert data["Port"] == 8000
-    assert data["Check"]["HTTP"] == "http://host.docker.internal:8000/health"
+    
+    expected_ip = get_container_ip()
+    assert data["Address"] == expected_ip
+    assert data["Check"]["HTTP"] == f"http://{expected_ip}:8000/health"
     assert data["Check"]["Interval"] == "10s"
     assert data["Check"]["Timeout"] == "5s"
     assert data["Check"]["DeregisterCriticalServiceAfter"] == "1m"
