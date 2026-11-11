@@ -22,27 +22,24 @@ from app.utils.validators import (
 
 logger = logging.getLogger(__name__)
 
-# ... (código intermedio de respuestas, exceptions y documentación se mantiene igual)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI):
+    # Startup: Valida configuración (fail fast) y registra el servicio en Consul
     settings = get_settings()
-    
-    # Startup: Registra el servicio en Consul (Fail Fast: si Consul no responde, el servicio no levanta)
     register_service(settings)
     
     yield
     
-    # Shutdown: Da de baja el servicio de Consul (si falla, solo emite un warning en el log)
+    # Shutdown: Da de baja el servicio de Consul (si falla, solo emite un warning)
     try:
         deregister_service(settings)
     except Exception as e:
         logger.warning(f"Error al dar de baja el servicio en Consul durante el apagado: {e}")
 
 
+# Instancia única de FastAPI con el lifespan unificado
 app = FastAPI(title="PDF Validator Service", version="0.1.0", lifespan=lifespan)
-
-# ... (resto del archivo con exception_handlers, /health y /validate)
 
 VALID_RESPONSE = {"valido": True, "mensaje": "El archivo es un PDF válido."}
 
@@ -100,8 +97,7 @@ def error_example(error: type[PDFValidationError], detail: str) -> tuple[str, st
     return error.type, error.title, detail
 
 
-# Documenta las respuestas reales de POST /validate. Declarar el 422 evita que
-# FastAPI agregue su error de validación genérico, que este servicio nunca devuelve.
+# Documenta las respuestas reales de POST /validate.
 VALIDATE_RESPONSES = {
     200: {
         "description": "El archivo es un PDF válido.",
@@ -138,16 +134,6 @@ VALIDATE_RESPONSES = {
 }
 
 
-@asynccontextmanager
-async def lifespan(_: FastAPI):
-    # Con configuración inválida el servicio no arranca, en vez de fallar en cada request.
-    get_settings()
-    yield
-
-
-app = FastAPI(title="PDF Validator Service", version="0.1.0", lifespan=lifespan)
-
-
 @app.exception_handler(PDFValidationError)
 async def handle_pdf_validation_error(request: Request, error: PDFValidationError):
     return problem_response(
@@ -162,7 +148,6 @@ async def handle_request_validation_error(request: Request, _: RequestValidation
 
 @app.exception_handler(StarletteHTTPException)
 async def handle_http_error(request: Request, error: StarletteHTTPException):
-    # Sin un problema propio para el status se usa "about:blank" (RFC 9457 §4.2.1).
     type_, title, detail = HTTP_PROBLEMS.get(
         error.status_code,
         (
@@ -178,8 +163,6 @@ async def handle_http_error(request: Request, error: StarletteHTTPException):
 
 @app.exception_handler(Exception)
 async def handle_unexpected_error(request: Request, _: Exception):
-    # El cliente solo recibe un mensaje genérico. Starlette vuelve a lanzar la
-    # excepción después de responder, y el servidor (uvicorn) loguea la traza.
     return problem_response(request, 500, *INTERNAL_ERROR)
 
 
@@ -192,8 +175,6 @@ def health() -> dict:
 def validate(
     file: UploadFile = File(...), settings: Settings = Depends(get_settings)
 ) -> dict:
-    # Se lee un byte más que el máximo: alcanza para detectar que se pasa
-    # sin cargar en memoria un archivo enorme.
     content = file.file.read(settings.max_file_size_bytes + 1)
     validate_pdf(
         filename=file.filename or "",
